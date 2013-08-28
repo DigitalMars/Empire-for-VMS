@@ -1,0 +1,18 @@
+Begin3
+Title:		vms-empire
+Version:	1.2
+Entered-date:	28JUL2000
+Description:	A solitaire empire game (sometimes called `VMS Empire'),
+		colorized and speed-tuned and with a save-interval option.
+		The 1.2 version corrects a bady mis-calculated probability 
+		table onm the manual page.
+Keywords:	empire, strategy, solitaire, game
+Author: 	chuck@amdahl.com (Chuck Simmons)
+Maintained-by:	esr@snark.thyrsus.com (Eric S. Raymond)
+Primary-site:	locke.ccil.org /pub/esr
+		80K vms-empire-1.2.tar.gz
+Platforms:	All
+Copying-policy:	BSD-like
+End
+
+

@@ -1,0 +1,614 @@
+/* %W% %G% %U% - (c) Copyright 1987, 1988 Chuck Simmons */
+
+/*
+ *    Copyright (C) 1987, 1988 Chuck Simmons
+ * 
+ * See the file COPYING, distributed with empire, for restriction
+ * and warranty information.
+ */
+
+(Notes tagged with ESR describe Eric S. Raymond's changes)
+
+Bugs
+----
+
+1)  The computer is allowed to leave armies in cities.  Fixing this
+feature might be difficult.  This feature also gives the computer
+a small advantage which slightly helps overcome the natural superiority
+of humans.
+
+2)  Once upon a time, if a fighter landed on a carrier, the user
+was never asked if she wanted to move it again.  I don't know if
+this bug still exists.
+
+3)  Satellites are not completely implemented.  When the user
+moves to a satellite, it should be allowed.  The user should
+not be asked if she "really wants to attack her own piece".
+Enemy satelites should not cause the user's pieces to be
+awoken, since there is nothing the user can do.
+
+4)  If the computer has a damaged ship and is returning it to
+port, the user can block the ship with another piece.  The computer
+will not attempt to move the damaged ship.  The user can then
+sail up a transport to the city the damaged ship is heading toward,
+unblock the damaged ship, and as soon as the damaged ship enters
+port, take the city.  Since ships in port are capturable, the user
+should now own one slightly damaged ship.
+
+5)  An assertion failed in 'attack_obj'.  Somehow this routine
+was passed a location where there was no defending object.  This
+implies that a view map was messed up.  I've no idea why.
+
+6)  Currently, a fighter's range is not decremented if it is not
+moved during a turn.  This could be called a feature, but I think
+I would really prefer that a fighter's range was decremented by at
+least one each turn.  The computer does not take advantage of this
+bug.
+
+7)  While playing a game, one of my cities was producing armies.
+At one point in the game, the city sudddenly decided that never
+again would it increment the build count.  Actually, at one point
+the build count seemed to be negative.  The count eventually reached
+zero and stayed there.  My hypothesis is that somewhere I'm trashing
+my data structures, and somehow the "owner" of the city got set to
+some incorrect value.
+
+(Note that bugs (5) and (7) occured while there was an inconsitency
+in the 'kill_city' routine.  Hardware had its ownership modified,
+but it remained in the object list of the wrong user.  This
+could have caused some problems.  So potentially bugs 5 and 7 no
+longer exist.)
+
+8)  Movement of armies in "attack" mode seems a little strange.
+
+9)  Maybe in "sentry" mode, an army should wake up and go into "attack"
+mode if an invader appears on the continent.  In any event, there
+should be some mechanism to allow a user to specify that an army
+should sit on the shore and wait for either a transport to pass by,
+or for an invader to appear on the continent.
+
+10)  When setting a city function, the computer should prompt
+for the various pieces of input.  Even I have a hard time setting
+functions for cities.
+
+
+Code Cleanup (Enhancements to improve performance or generality)
+----------------------------------------------------------------
+
+1)  How can we use minicurses?  minicurses is smaller and possibly
+faster than full blown curses.  The curses routines that I use
+which are not part of minicurses are 'clrtoeol', 'getstr', and 'getch'.
+These seem pretty fundamental, but I know very little about curses.
+
+2)  'vmap_cont' and 'vmap_mark_up_cont' would almost certainly be
+faster if we didn't recurse, but instead used something like the
+perimeter lists used in all the other map scanning algorithms.
+Since 'vmap_mark_up_cont' takes about 10% of the processing time,
+the performance improvements could be significant.
+
+3)  The real speed killer is 'expand_perimeter'.  This routine
+is very generalized, and not all the generality is always needed.
+It might be better to write multiple non-general routines.  I believe
+this routine accounts for roughly 20% to 30% of the processing time.
+If we take subroutines like 'strchr' and 'terrain_type' into account
+as well, this routine accounts for more like 50% of the processing.
+However, on a mainframe, the game plays sufficiently fast.
+
+ESR: I've done some tuning of expand_perimeter.
+
+4)  Allow multiple computer players and/or multiple human players.
+Allow the players to come in over a network of workstations.
+
+5)  The width and height of the map should be parameters to the
+program.
+
+6)  Interrupts should be caught.  When an interrupt is received,
+the user should be asked if she really wants to quit, and she
+should be warned if the game will not be saved.  This is particularly
+useful when playing over a noisy phone line that generates spurious
+interrupts.  (When will digitial telephone transmissions arrive?)
+
+7)  Storage for the various data structures should be allocated
+dynamically instead of being stored in static tables.
+
+
+Debugging Aids
+--------------
+
+1)  My current debugging algorithm is to put the program into
+debug mode with the "++" command, and then put the program into
+movie mode with the "%" command.  When I see something wrong, I
+hit the interrupt key and restart the program, so that I can
+use other debugging commands.  It would be nice if this interface
+was better.  (See comments above about catching interrupts.)
+
+2)  It would be nice if there were debugging commands which allowed
+me to examine the computer map and request information such as
+"What is this city producing?  What objects are in this city? etc."
+This would be very much like the edit mode "?" command.
+
+
+Computer Algorithm Enhancements
+-------------------------------
+
+1)  What improvements can be made to speed up the acquiring of
+territory by the computer?
+
+Note:  As a person, I can acquire about 1/2 the board (and control
+3/4 of the board) in about 150 turns.
+The current algorithm seems to be a little bit slower, but within
+the same order of magnitude.
+
+Observations:
+
+I've implemented an algorithm which keeps the computer from exploring
+every little square of the world it comes across.  Building satellites
+seems to slow down the computer.  The computer has an algorithm
+for unloading armies on interesting continents.
+
+A careful balance seems to be needed between the number of army
+producing cities and the number of tt producing cities.  Currently,
+I build a tt as soon as poosible.  On large
+continents, this is a drawback, as the tt is built before armies
+are ready to leave.  To counter this effect, I attempted to build
+more armies in other cities.  This causes an overproduction in
+armies after the first tt's fill up and head off to find something
+to dump on.
+
+Suggestions:
+
+Various minor improvements might be made in causing tt's to load
+one or two turns faster, and to unload one or two turns faster.
+Other improvements would prevent two tt's from heading to the
+same destination.
+
+This fix would probably go in 'transport_move' in 'compmove.c'.
+In this routine, for a loading transport, we would count the
+number of adjacent loading armies for the current cell, for each reachable
+cell that is one away, and for each reachable cell that is two away.
+If there were reachable loading armies, we would move the transport
+to that square.  Otherwise we would use the current algorithm to
+find a destination for the transport and move the transport to that
+destination.
+
+For unloading transports, things are perhaps slightly more difficult.
+I think what needs to be done here is, if the transport cannot move
+along a shortest path towards the destination, then the transport
+should attempt to move to an adjacent square which minimizes either
+the row distance between the tt and the objective, or the column
+distance between the tt and the objective.  For tie-breakers, the
+tt would move to the cell which touched the most land.
+
+Possibly I should describe the problems that the above to tweaks
+would fix.  For loading armies, loading transports prefer moving to
+staying in place.  Thus, they will sometimes move from a square
+that touches lots of loading armies, to a square that touches very
+few loading armies.  This probably increases the load time by one
+or two turns.
+
+For unloading tt's, a tt will often be on a diagonal from a city
+that is an objective.  Unloading armies will hop off one at a time
+because there is only one land square on a shortest path between the
+tt and the city.  This particular case wastes about 4 moves.
+
+2)  The computer's algorithm is optimized for 70% water and
+a smoothness of 5.  (More accurately, I developed the algorithm
+using these parameters for all of my testing and debugging.)
+Potentially the computer algorithm will be extremely poor for
+other parameter values.  For example, the computer currently
+builds transports at the first possible opportunity.  Transports
+would not be very useful on a world with only 10% water.  (Still,
+there are checks to prevent ships from being built in inappropriate
+cities, so this may not be too much of a problem.)
+
+Potentially, the computer should use a more dynamic alogorithm
+where it "notices" that certain kinds of pieces are going to be
+need in the near future and then builds these things.  I've no ideas
+in this area for concrete algorithms, however.
+
+A plausible alternative would be for the computer to examine the
+parameters supplied by the user.  If the user knows the parameters,
+why shouldn't the computer?
+
+3)  The computer should be willing to land a fighter on a
+carrier if the carrier can be reached in one turn.
+
+4)  The computer should "track" user ships.  That is, whenever the
+computer sees a user ship, it should keep a list of possible locations
+where that ship could be.  It should then make some attempt to find
+and destroy the ship.  (See "Search and Destroy" under the user
+interface comments.)
+
+This code may be more trouble then its worth.  Currently, it appears
+that the computer does a very good job of destroying user shipping.
+The reason for this is that there are good reasons for the user's
+ships to reappear where ships were previously seen.  Also, the
+computer tends to amass great amounts of fire power when a ship
+has been seen, so the computer tends to bump into any other user
+ship that happens to be in the area.  Also, the user is looking for
+the computer's ships, and is moving lots of ships into the sealanes
+that the computer tends to use.
+
+
+User Interface Enhancements
+---------------------------
+
+1)  In edit mode, it would be nice if it was easier to move around
+the screen.  (Mouse based approaches where the user points and clicks
+to say "move this piece to here" would be real nice.)  One idea
+would be to allow the user to type in four digits that specify the
+square to move to; or to type in two digits where the first digit
+is the 10's row, and the second digit is the 10's column.  (Thus,
+if the user typed "43", the cursor would be moved to location "4030".)
+
+2)  Small screens should not be redrawn so often.  When moving
+pieces, we should move everything that is on the current screen
+(except for stuff that is real close to the edge of the screen,
+but not the edge of the board).  If necessary, we might redraw
+the screen as the user moved off the screen.  Or we could allow
+the user to explicitly tell us to redraw a new sector.  If the
+screen was redrawn, we would then work on moving pieces that were
+displayed on the new screen.  In general, we only want to redraw
+the screen if we absolutely have to.  (This approach would also
+be real, real useful on terminals that are just a little bit smaller
+than the complete map.  Using a terminal with something like 105
+columns will be extremely disconcerting.  The screen will be
+redrawn for what seems like no reason at all.)
+
+3)  It is extremely difficult to tell when a satellite has gone
+by, and when an enemy piece displayed on the screen is current,
+and when the piece is a ghost.
+
+One possibility would be to highlight enemy pieces that have just
+been seen.  Another possibility would be for the user to type
+a "?" when the cursor is on top of any enemy piece, and the displayed
+information would be how long ago that piece was seen.  (Also, see
+search and destroy tracking below.)
+
+4)  The user should be allowed to "zoom in" and "zoom out".  Zooming
+in causes the playing board to be printed at four times the density
+of the previous display density.  Thus, four squares would be
+drawn as a single square on the screen.  Zooming out undoes the
+affects of zooming in.  Actually, there should be multiple
+levels of zooming; 10 levels would probably more than suffice.
+This enhancement allows the user to easily get a big picture of what
+is going on.  Most of the time, the user would be able to play
+with the board zoomed in.  The user might sometimes need to zoom
+out to navigate a ship through a "river" or an army over an isthmus.
+
+Currently, there is a command to display a "zoomed" version of the
+map.  This command prints a compact display of the map that fits on
+the screen.  This is not quite the same as the above, because what
+I'm suggesting is that the user be allowed to make moves on a compact
+display of the map.
+
+5)  Search and Destroy.  Here is an idea for a sizeable modification
+to the user interface.
+
+Basically, we want the computer to keep track of some information
+for the user.  The information is possible locations of enemy ships.
+When the user sees a ship on the screen, the computer would start
+tracking the ship.
+
+(Tracking would be implemented as follows:  The initial location
+of the ship would be stored in a perimeter list.  On each round,
+the perimeter list would be expanded to encompass all cells which
+the ship could have reached.  Cells that the user has seen this
+turn are removed from the perimeter list.  After the user's turn,
+cells that the user has seen are removed from the list again.
+Problems arise when a tracked ship moves into unexplored territory.)
+
+Now the user should be able to give various commands.  Commands
+would be things like:
+
+"Describe to me all ships you are tracking."  This command would
+print a list of ships being tracked, the types, the number of
+possible locations for the ship, the time the ship was first seen,
+and any code used to represent that ship in tracking displays.
+Possibly, the likelihood that the ship has been destroyed would
+be displayed as well.
+
+"Display possible locations for a ship."  This command would
+display the possible locations for a ship.  Possible locations
+might be printed by highlighting the squares where the ship could
+be.
+
+"Stop tracking a ship."  This command would delete information about
+a ship that the user assumed she had destroyed.  Note that the computer
+will sometimes be able to tell that a tracked ship has been destroyed.
+The user might also give this command if a ship was presumed to have
+gotten itself lost.  The computer might also stop tracking a ship if
+the number of possible locations for the ship gets large.
+
+To support the above, the user should be able to place fighters
+and ships in "Search and Destroy" mode.  Here the user would specify
+a tracked ship that was to be searched for.  The fighters and ships of
+the user would move in such a way as to minimize the size of the
+perimeter list for the tracked ship.
+
+5)  It has been suggested that all pieces at a location be moved
+at once instead of skipping around the screen in the order the
+pieces happen to be allocated.  For example, the user is often
+asked what to do with each of the armies aboard a transport.  If
+the user knows there are five armies aboard, she may start hitting
+the 's' key to put those armies to sleep.  If the user isn't paying
+enough attention, she may discover that she has just put to sleep
+some piece on a few squares away.
+
+6)  When moving a ship or army toward a destination, or when
+moving a ship toward port to be repaired, the user will often
+want to avoid land that might contain enemy pieces.  This functionality
+is partially implemented in that ships prefer to be at sea if there
+is nothing to explore.  Pieces moving towards a destination also
+prefer to move so that they are in the middle of all the shortest
+paths to the destination.
+
+Despite this, it might be desirable to implement a movement mode
+whereby ships went out of there way to avoid the enemy.
+
+7)  It should be possible for the user to obtain information about
+pieces which are contained within another piece.  For example,
+it would be nice to know the movement function of every ship
+contained in a city, or of every army on a transport.
+
+8)  The big problem...  The user needs to type one hell of a lot
+of commands to control the movement of her pieces.  I've implemented
+a lot of stuff to alleviate this problem, but lots more can be
+done.  If we assume that everything is implemented as a "movement
+function", the following movement functions would be interesting:
+
+"load army" -- an army moves toward the nearest loading transport
+or transport producing city.  Note that this is the same algorithm
+as that used by the computer.
+
+(For armies, there are really only
+three functions that are needed:  "attack" (which is implemented)
+where the army explores a continent and attackes the enemy or
+unowned cities; "load" where armies leave a continent; and "unload"
+where armies leave a boat for some other continent.  Also note that
+when I play the game, most of the commands that I give are commands
+to move the army to a place where a transport will pick up the army,
+commands to have the army wait for the transport and load, commands
+to put the army to sleep while it is being transported, and command
+to wake up and unload the armies.)
+
+"load transport" -- the transport is marked as "loading", and the
+transport moves toward the nearest loading army.
+
+"unload army" -- I'm not sure what this does, nor what "unload
+transport" does.  Basically, I want some pseudo-intelligent mechanism
+for telling the computer not to ask me questions about armies on
+a transport until that transport reaches "something interesting".
+"load army" and "load transport" would be much easier to implement.
+Unloading is where intelligence and strategy can be important.
+
+"patrol" -- This causes a piece to move so as to decrease the
+likelihood that an enemy piece can sneak by.  One method of implementing
+this would be for the piece to move toward the square two away that
+had been least recently seen.  It might be desirable to constrain
+a patrolling piece to a relatively small area of the board.
+
+Note that the "Grope" command (or "explore" mode) is no longer of
+much use for armies.  Possibly "attack" mode would be useful for
+ships and fighters.
+
+9)  One possibility for all of the above might be to allow the
+user to specify some algorithm that describes how pieces should
+move.  I've thought along the lines of letting the user specify
+some sort of macro, and letting the user specify the arguments
+to one of the 'vmap_find_*obj' routines.  This might require the
+ability for the user to place arbitrary labels on any square.
+
+
+Game Modifications
+------------------
+
+1)  Mobile repair platforms.  Currently a damaged boat moves very
+slowly towards the nearest city.  A floating platform that could move
+towards damaged boats might be useful.  Also, this little baby would
+stay out of cities and so not be capturable.  Hits would be 1; strength
+zero; and speed might be greater than 2.
+
+2)  Setting transports to have a strength of zero might be interesting.
+
+3)  Implementing the world as a torus instead of a rectangle might
+be better.  This means having the map wrap at the edges instead of
+terminating at the edges.
+
+4)  Increase the "logistics" aspects of the game.  What about
+oil, iron, food, etc?  Oil might be used to determine the range
+of a boat or ship.  Armies might starve without food.  Iron might
+be necessary for building a ship.
+
+5)  One of my goals has been to define lots of highly specialized
+pieces so that each type of piece must be built and used in order
+to have an effective strategy.  In the original game of empire,
+I eventually developed a strategy whereby the only pieces I would
+build were armies and transports.  The computer basically couldn't
+beat me unless we both started on the same continent and it lucked out.
+The game also ended within one hundred turns.
+
+Now, eventually, I might decide that the current program also has
+the same faults (in which case I'll tweak the computer movement
+algorithms so that it plays differently).
+
+However, I have been making changes to increase the specialization
+of all the pieces.
+
+Obviously, armies must be built because they are the only pieces that
+can capture cities.
+
+Obviously, transports must be built (on worlds that have a reasonable
+amount of water) because that's the only way an army can be carried
+to another city.  Since transports don't move all that fast, and
+since transports are fairly weak, they aren't good for much else
+(in theory).
+
+Beyond this...  Patrol boats and fighters are very similar.  Both
+are fast, both are quickly produced, both have low hits.
+I suspect that an effective strategy could be developed where one
+or the other of these pieces, but not necessarily both, were built.
+Patrol boats have an advantage in their unlimited range.  This makes
+them useful for extremely long range exploration.  Fighters have
+an advantage in their great speed.  This makes them extremely useful
+for tracking and patrolling.  Fighters also have a sufficient range
+that they can easily move across the board from one city to another
+without really needing carriers.  Possibly, the range of fighters
+is too great.  Possibly, the range of fighters should be 16.
+(For purposes of user friendliness, the range of fighters should be
+a multiple of the speed.)
+
+Now, carriers, destroyers, subs, and battleships are very similar.
+Carriers and battleships have the advantage that they can take a
+beating and then be reparied.  Destroyers and subs have the advantage
+that lots of them can be produced which increases the amount of
+territory that can be seen at any time.
+
+Decreasing the range of fighters might increase the utility of
+carriers, but then the user would probably build more patrol boats
+instead.
+
+So, I guess I'm looking for more specialized pieces.  Mobile
+repair platforms are one idea.  Satellites are an attempt at
+a second idea, but this idea needs more refinement.  Currently,
+the computer does just fine without building satellites (as near
+as I can tell).  Maybe satellites would be more useful if they
+were faster or scanned a larger area.
+
+
+User Comments
+-------------
+> empire is getting very good about asking me about all the troups on a transport,
+> etc. before going on to another piece, but its still not perfect.
+> 
+> the computer still seems to be spending too much effort fighting, and not enough
+> exploring.  i think i've got it beat, although i'm not sure yet.  i was burning
+> transport after transport (of the computers) while he tried to take an island
+> from me.  he finally succeeded, but i must have killed 8 transports in the
+> process (he got two of mine).
+> 
+> early in the game, he had a real superiority with patrol boats, that was giving
+> me fits.  but now i think i've got him, and am making it very hard for him to
+> move around.  also, he still hasn't finished taking islands he's colonized--
+> hopefully i'll be able to take some away from him.  he should have consolidated
+> them long ago, and being harassing me.
+> 
+> The satellite is fun, although i wish it would head into enemy territory
+> instead of back into mine.
+
+The first paragraph is a request that all pieces of a type in
+one position be moved before moving pieces of that type at
+another position.  This fix should be combined with the needed fix
+to move all pieces on the screen before redrawing the screen.
+
+The second paragraph suggests to me that the computer should
+move lots of patrol boats and other support craft into an area
+to clear it out before moving in transports.  The transports are
+too vulnerable, and the computer isn't defending them very well.
+Maybe what I mean here is that the computer should have a concept
+of "escorts".  When moving a transport, a destroyer, sub, or at
+least a patrol boat should try and remain near by.  Then if our
+transport gets destroyed by an enemy, at least there is some chance
+that we can kill off the attacker.
+
+Other problems probably exist in this area as well.  Early in the
+game, the computer will see an unowned city and drop some armies on
+it.  A little later the computer will notice that there is a user
+city on the same continent.  Now, all the computer's transports
+go floating around that user city and dump armies on it.  The computer
+has used massive amounts of resources to take a continent instead
+of exploring and sweeping up more easily defended continents.
+
+On the other hand, the computer is very "contentious".  It's kind of
+fun to have the computer fighting so hard to keep me from taking its
+cities.  Also, if I don't use the current strategy, there is a danger
+that the computer will not fight hard enough to keep the user from
+invading and taking a computer-owned continent.
+
+Colonization...  The computer takes new continents very slowly.
+I don't know why.  The computer should be producing armies in
+the first city it takes, and the computer will produce armies
+in new cities as long as it sees an unowned city to attack.
+Potentially, there is a problem in that the computer might not
+see an unowned city, even though there is lots of unexplored territory,
+and thus probably an unowned city, on the continent.
+
+The bigger problem seems to be that the computer is producing too
+many armies and not enough other stuff.  In the particular game that
+these comments derived from, the computer had a massive continent
+that was smothered in armies.  Instead of producing so many armies,
+the computer should have produced more fighters and non-transport
+ships.  Tweaking the "ration?" arrays in compmove.c should make things
+better.
+
+Note that the user's strategy was to seek and destroy transports.
+The user would ignore other ships for relatively long periods of
+time for a chance to destroy one of the computer's transports.  This
+strategy was quite effective; the user tended to be able to keep
+many more transports on the board than the computer.
+
+> planes aren't that useful even as they are--sure they're good for zooming
+> in and destroying the odd troop transport, but they're not that helpful for
+> exploration.  i still suspect the optimal strategy is armies, transports,
+> and patrol boats, with a few planes.  Later in the game planes become
+> useful because they can be gotten to the scene so quickly.   If you want
+> to reduce them, how about reducing them to 24?   Also, when a plane is
+> about to fly past the point of no return (return to anything) how about
+> a question, a la "troops can't walk on water, Sir?".  as long as i can
+> override the objection, its not a problem.
+
+> oh, i think it would suffice to be able to launch satellites in a particular
+> direction.
+
+The first paragraph is a response to my suggestion that a fighter's
+range should be reduced to 16 so as to make patrol boats and carriers
+more useful.
+
+Maybe we should crank up the hits on the various objects.  This
+would make attacks a little more deterministic.  For example:
+
+armies: 2               armies 10
+transports: 2           transports 10
+fighters: 2             fighters 10
+patrol boats: 2         patrol boats 10
+submarines: 4           submarines 20
+destoyers: 6            destroyers 30
+carriers: 10            carriers 80
+battleships: 12         battleships 100
+
+But then we would have to worry about repairing armies?  Or maybe
+the effectiveness of an army simply goes down when it doesn't have
+full hit points?  This would also greatly increase the repair time
+of an object.  Or maybe objects would be repaired two or 10 hits
+per turn.
+
+Other bugs...
+-------------
+
+Possibly displayed messages should be of two types:  Important messages
+and non-important messages.  After an important message, the computer
+would delay for the full amount of delay time.  After an unimportant
+message, it might not do anything.
+
+
+1)  The "m" and "n" commands should work in movement mode.
+They should also work when setting the function of a piece
+for a city.
+
+2)  Should there be a way to tell the program you are done
+attempting to move a fighter, and don't ask me about moves
+seven more times?
+
+3)  The program should use environment variables or command line
+arguments to supply the filenames for "empsave.dat" and "empmovie.dat".
+A command line argument would also be useful for telling the
+program how often the game should be saved.  Actually, all
+command line arguments should have associated environment variables
+that can be used to set defaults.
+
+ESR: I've added a save-interval option.
+
+4)  When the user types "q" to quit, the program should exit
+immediately if the game has been saved.  If the game hasn't been
+saved, the user should be told, and asked if she really wants to
+quit.
